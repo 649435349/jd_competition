@@ -19,7 +19,7 @@ README
 全部用Python写成，Python也是我最喜欢的语言。
 用了大量的库,如Numpy,Pandas,Sklearn,Seaborn,Xgboost……
 更多的数据工作在ipython中实现了。
-最后ranked TOP4%(实习期间实在是没精力打比赛，太累了……)
+最后ranked TOP2%(实习期间实在是没精力打比赛，太累了……)
 第二次参加比赛，熟练使用了pandas之后感觉爽爆了
 ```
 
