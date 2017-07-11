@@ -41,6 +41,7 @@ def create():
     user = pd.read_csv('user.csv')
 
     # 建立训练集
+
     for www in range(3):
         trainset = pd.DataFrame()
         for i in list(pd.date_range('2016-02-01', '2016-02-25')) + list(pd.date_range('2016-03-16', '2016-03-28')):
@@ -51,22 +52,46 @@ def create():
             label_begin_datetime = feature_begin_datetime + 14 * delta
             label_end_datetime = feature_begin_datetime + 18 * delta
             print '已经做到'+str(i)
-            # 取前5天加入购物车，前3天浏览，前3天点击
+            # 取前1天加入购物车，前1天未加入购物车，倒数第二天交互的样本
             if www==0:
-                user_item = action[(action['time'] >= ((feature_end_datetime-4*delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                                   (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))&
-                                   (action['type']==2)] \
+                user_item = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S')))&(action['type']==2)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
-            elif www==1:
-                user_item = action[(action['time'] >= ((feature_end_datetime-2*delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                                   (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))&
-                                   (action['type']==1)] \
+                tmpp = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+            elif www==2:
+                user_item = action[(action['time'] >= ((feature_end_datetime-delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime-delta).strftime('%Y-%m-%d %H:%M:%S')))] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                tmpp = action[(action['time'] >= ((feature_end_datetime-delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime-delta).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
             else:
-                user_item = action[(action['time'] >= ((feature_end_datetime-2*delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                                   (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & (
-                                   action['type'] == 6)] \
+                user_item = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                   action['type'] == 2)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                user_item_whole = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S')))] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                user_item = pd.DataFrame(list(set([tuple(i) for i in user_item_whole.values]) -
+                                         (set([tuple(i) for i in user_item_whole.values]) & set(
+                    [tuple(i) for i in user_item.values]))),
+                                         columns=['user_id', 'sku_id', 'brand'])
+                tmpp = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+            try:
+                user_item = pd.DataFrame(np.array(list(set([tuple(i) for i in user_item.values]) -
+                                                       (set([tuple(i) for i in user_item.values]) & set(
+                                                           [tuple(i) for i in tmpp.values])))),
+                                         columns=['user_id', 'sku_id', 'brand'])
+            except:
+                continue
 
             _user_item = [list(i) for i in user_item.values]
 
@@ -87,20 +112,20 @@ def create():
                     _user_item[i].append(0)
 
             tmpset = pd.merge(tmpset, pd.DataFrame(_user_item, columns=['user_id', 'sku_id', 'brand','label']),
-                              on=['user_id', 'sku_id', 'brand'],how='left')
+                              on=['user_id', 'sku_id','brand'],how='left')
 
             # 随机采样正:负=1:8
             len1 = tmpset[tmpset['label'] == 1].shape[0]
-            tmpset = pd.concat([tmpset[tmpset['label'] == 0].sample(8 * len1), tmpset[tmpset['label'] == 1]])
+            tmpset = pd.concat([tmpset[tmpset['label'] == 0].sample(4*(www+1) * len1), tmpset[tmpset['label'] == 1]])
 
             # 用户个人信息
             tmpset = pd.merge(tmpset, user, on='user_id', how='left')
 
             tmp_whole_action = whole_action[
                 (whole_action['time'] >= (feature_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                (whole_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))]
+                (whole_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S')))]
             tmp_action = action[(action['time'] >= (feature_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                                (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))]
+                                (action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S')))]
 
             # 用户的对商品，品牌，类别，整体的特征
             # 时间跨度为6h,12h,1d,3d,7d,14d和之前所有的
@@ -110,17 +135,17 @@ def create():
             # 浏览数,加购数,减购数,下单数，关注数，点击数
             # 不需要类别的特征，因为大家都是cate8
             for _, i in enumerate([3,6, 12, 24, 24 * 3, 24 * 7, 24 * 14,
-                                   (convert_timedelta(label_begin_datetime - datetime.datetime(2016, 2, 1)))]):
+                                   (convert_timedelta((feature_end_datetime + delta) - datetime.datetime(2016, 2, 1)))]):
                 for j in [1, 2, 3, 4, 5, 6]:
                     tmp_tmp_action = tmp_action[
-                        (tmp_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
+                        (tmp_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
                         (tmp_action['time'] >= (
-                            (label_begin_datetime - datetime.timedelta(hours=i)).strftime(
+                            (feature_end_datetime + delta - datetime.timedelta(hours=i)).strftime(
                                 '%Y-%m-%d %H:%M:%S'))) & \
                         (tmp_action['type'] == j)]
                     tmp_tmp_whole_action = tmp_whole_action[
-                        (tmp_whole_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                        (tmp_whole_action['time'] >= ((label_begin_datetime - datetime.timedelta(hours=i)).strftime(
+                        (tmp_whole_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                        (tmp_whole_action['time'] >= ((feature_end_datetime + delta - datetime.timedelta(hours=i)).strftime(
                                 '%Y-%m-%d %H:%M:%S'))) & \
                         (tmp_whole_action['type'] == j)]
 
@@ -177,7 +202,7 @@ def create():
                                           on=['brand'], how='left')
 
             # 填充0，之后相除会出现inf，再替换
-            tmpset.fillna(0,inplace=True)
+            tmpset.fillna(0)
 
             tmp_timegap_list = ['3h_type','6h_type', '12h_type', '24h_type', '72h_type', '168h_type', '336h_type', 'before_type']
             for _, i in enumerate(tmp_timegap_list):
@@ -237,7 +262,7 @@ def create():
 
                 # 用户特征的重构
                 for j in ['skuid_', 'brand_', 'cate_', 'whole_']:
-                    # 该用户其他行为对下单的转化率,体现的是这个用户近期各个行为的转化率
+                    # 该用户其他行为对下单的转化率,体现的是这个用户近期买东西的习惯
                     tmpset = pd.concat([tmpset,
                                         pd.DataFrame(tmpset[j + i + '4'] / tmpset[j + i + '1'].astype('float'),
                                                      columns=[j + i + '4/1']),
@@ -253,27 +278,27 @@ def create():
                     # 加用户的差分特征，体现的是用户对于该商品，品牌，类别，总体的浏览,加购……的递进情况
                     if _ != 7:
                         tmpset = pd.concat([tmpset,
-                                            pd.DataFrame(-2*tmpset[j + tmp_timegap_list[_] + '1'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '1'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '1'],
                                                          columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                              _ + 1] + '1']),
-                                            pd.DataFrame(- 2 *tmpset[j + tmp_timegap_list[_] + '2'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '2'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '2'],
                                                          columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                              _ + 1] + '2']),
-                                            pd.DataFrame(- 2 *tmpset[j + tmp_timegap_list[_] + '3'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '3'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '3'],
                                                          columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                              _ + 1] + '3']),
-                                            pd.DataFrame(- 2 *tmpset[j + tmp_timegap_list[_] + '4'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '4'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '4'],
                                                          columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                              _ + 1] + '4']),
-                                            pd.DataFrame(- 2 *tmpset[j + tmp_timegap_list[_] + '5'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '5'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '5'],
                                                          columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                              _ + 1] + '5']),
-                                            pd.DataFrame(- 2 *tmpset[j + tmp_timegap_list[_] + '6'] + tmpset[
+                                            pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '6'] - 2 * tmpset[
                                                 j + tmp_timegap_list[_ + 1] + '6'],
                                                          columns=[
                                                              j + tmp_timegap_list[_] + '-' + tmp_timegap_list[_ + 1] + '6'])
@@ -289,37 +314,37 @@ def create():
                                                                                                           tmp_timegap_list[
                                                                                                               _] + str(
                                                 typeid)],
-                                            columns=['skuid/brand_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['skuid/brand' + tmp_timegap_list[_] + str(typeid)]),
                                         pd.DataFrame(
                                             tmpset['skuid_' + tmp_timegap_list[_] + str(typeid)] / tmpset['cate_' +
                                                                                                           tmp_timegap_list[
                                                                                                               _] + str(
                                                 typeid)],
-                                            columns=['skuid/cate_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['skuid/cate' + tmp_timegap_list[_] + str(typeid)]),
                                         pd.DataFrame(
                                             tmpset['skuid_' + tmp_timegap_list[_] + str(typeid)] / tmpset['whole_' +
                                                                                                           tmp_timegap_list[
                                                                                                               _] + str(
                                                 typeid)],
-                                            columns=['skuid/whole_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['skuid/whole' + tmp_timegap_list[_] + str(typeid)]),
                                         pd.DataFrame(
                                             tmpset['brand_' + tmp_timegap_list[_] + str(typeid)] / tmpset['cate_' +
                                                                                                           tmp_timegap_list[
                                                                                                               _] + str(
                                                 typeid)],
-                                            columns=['brand/cate_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['brand/cate' + tmp_timegap_list[_] + str(typeid)]),
                                         pd.DataFrame(
                                             tmpset['brand_' + tmp_timegap_list[_] + str(typeid)] / tmpset['whole_' +
                                                                                                           tmp_timegap_list[
                                                                                                               _] + str(
                                                 typeid)],
-                                            columns=['brand/whole_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['brand/whole' + tmp_timegap_list[_] + str(typeid)]),
                                         pd.DataFrame(
                                             tmpset['cate_' + tmp_timegap_list[_] + str(typeid)] / tmpset['whole_' +
                                                                                                          tmp_timegap_list[
                                                                                                              _] + str(
                                                 typeid)],
-                                            columns=['cate/whole_' + tmp_timegap_list[_] + str(typeid)]),
+                                            columns=['cate/whole' + tmp_timegap_list[_] + str(typeid)]),
                                         ], axis=1)
 
             # 加商品信息
@@ -469,16 +494,16 @@ def create():
                     del tmp['time']
                     tmpset = pd.merge(tmpset, tmp, on=['user_id', 'feature_end_date'], how='left')
                 tmp1 = pd.DataFrame(
-                    (tmpset['userid_skuid_farest_type{}'.format(i)] - tmpset['userid_skuid_nearest_type{}'.format(i)]+1),
+                    (tmpset['userid_skuid_farest_type{}'.format(i)] - tmpset['userid_skuid_nearest_type{}'.format(i)]),
                     columns=['userid_skuid_farest-nearest_type{}'.format(i)])
                 tmp2 = pd.DataFrame(
-                    (tmpset['userid_brand_farest_type{}'.format(i)] - tmpset['userid_brand_nearest_type{}'.format(i)]+1),
+                    (tmpset['userid_brand_farest_type{}'.format(i)] - tmpset['userid_brand_nearest_type{}'.format(i)]),
                     columns=['userid_brand_farest-nearest_type{}'.format(i)])
                 tmp3 = pd.DataFrame(
-                    (tmpset['userid_cate_farest_type{}'.format(i)] - tmpset['userid_cate_nearest_type{}'.format(i)]+1),
+                    (tmpset['userid_cate_farest_type{}'.format(i)] - tmpset['userid_cate_nearest_type{}'.format(i)]),
                     columns=['userid_cate_farest-nearest_type{}'.format(i)])
                 tmp4 = pd.DataFrame(
-                    (tmpset['userid_whole_farest_type{}'.format(i)] - tmpset['userid_whole_nearest_type{}'.format(i)]+1),
+                    (tmpset['userid_whole_farest_type{}'.format(i)] - tmpset['userid_whole_nearest_type{}'.format(i)]),
                     columns=['userid_whole_farest-nearest_type{}'.format(i)])
                 tmpset = pd.concat([tmpset, tmp1,tmp2,tmp3,tmp4], axis=1)
 
@@ -518,19 +543,19 @@ def create():
 
                                     # 用户行为的频率
                                     pd.DataFrame(
-                                        tmpset['skuid_336h_type{}'.format(i)] /
+                                        tmpset['skuid_before_type{}'.format(i)] /
                                         tmpset['userid_skuid_farest-nearest_type{}'.format(i)],
                                         columns=['userid_skuid_frequency_type{}'.format(i)]),
                                     pd.DataFrame(
-                                        tmpset['brand_336h_type{}'.format(i)] /
+                                        tmpset['brand_before_type{}'.format(i)] /
                                         tmpset['userid_brand_farest-nearest_type{}'.format(i)],
                                         columns=['userid_brand_frequency_timegap_type{}'.format(i)]),
                                     pd.DataFrame(
-                                        tmpset['cate_336h_type{}'.format(i)] /
+                                        tmpset['cate_before_type{}'.format(i)] /
                                         tmpset['userid_cate_farest-nearest_type{}'.format(i)],
                                         columns=['userid_cate_frequency_timegap_type{}'.format(i)]),
                                      pd.DataFrame(
-                                      tmpset['whole_336h_type{}'.format(i)] /
+                                      tmpset['whole_before_type{}'.format(i)] /
                                       tmpset['userid_whole_farest-nearest_type{}'.format(i)],
                                       columns=['userid_whole_frequency_timegap_type{}'.format(i)]),
 
@@ -559,7 +584,6 @@ def create():
                                         -tmpset['userid_cate_nearest_type{}'.format(i)] +
                                         tmpset['userid_whole_nearest_type{}'.format(i)],
                                         columns=['userid_cate-whole_nearest_type{}'.format(i)]),
-
                                     # 用户对该商品的最远点击、收藏、加购物车、购买时间
                                     # 减去同类其他商品的最近点远、收藏、加购物车、购买时间
                                     pd.DataFrame(
@@ -612,6 +636,10 @@ def create():
                                         tmpset['userid_cate_farest-nearest_type{}'.format(i)] -
                                         tmpset['userid_whole_average_hours_type{}'.format(i)],
                                         columns=['userid_cate-whole_average_hours_type{}'.format(i)]),
+                                    pd.DataFrame(
+                                        tmpset['userid_cate_farest-nearest_type{}'.format(i)] -
+                                        tmpset['userid_whole_average_hours_type{}'.format(i)],
+                                        columns=['userid_cate-whole_average_hours_type{}'.format(i)]),
 
                                     pd.DataFrame(
                                         tmpset['userid_skuid_farest-nearest_type{}'.format(i)] -
@@ -620,7 +648,7 @@ def create():
                                     pd.DataFrame(
                                         tmpset['userid_brand_farest-nearest_type{}'.format(i)] -
                                         tmpset['brand_average_hours_type{}'.format(i)],
-                                        columns=['userid_skuid-brand_average_hours_type{}'.format(i)]),
+                                        columns=['userid_skuid-skuid_average_hours_type{}'.format(i)]),
                                     ], axis=1)
 
 
@@ -664,25 +692,45 @@ def create2():
             label_begin_datetime = feature_begin_datetime + 14 * delta
             label_end_datetime = feature_begin_datetime + 18 * delta
 
-            # 取前5天加入购物车，前3天浏览，前3天点击
+            # 取前5天的交互样本 且没有购买行为的
             if www == 0:
-                user_item = \
-                action[(action['time'] >= ((feature_end_datetime - 4 * delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                       (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) &
-                       (action['type'] == 2)] \
+                user_item = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                   action['type'] == 2)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
-            elif www == 1:
-                user_item = \
-                action[(action['time'] >= ((feature_end_datetime - 2 * delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                       (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) &
-                       (action['type'] == 1)] \
+                tmpp = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+            elif www == 2:
+                user_item = action[(action['time'] >= ((feature_end_datetime - delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime - delta).strftime('%Y-%m-%d %H:%M:%S')))] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                tmpp = action[(action['time'] >= ((feature_end_datetime - delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime - delta).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
             else:
-                user_item = \
-                action[(action['time'] >= ((feature_end_datetime - 2 * delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
-                       (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & (
-                           action['type'] == 6)] \
+                user_item = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                   (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                       action['type'] == 2)] \
                     [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                user_item_whole = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                                         (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S')))] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+                user_item = pd.DataFrame(list(set([tuple(i) for i in user_item_whole.values]) -
+                                              (set([tuple(i) for i in user_item_whole.values]) & set(
+                                                  [tuple(i) for i in user_item.values]))),
+                                         columns=['user_id', 'sku_id', 'brand'])
+                tmpp = action[(action['time'] >= ((feature_end_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                              (action['time'] <= ((label_begin_datetime).strftime('%Y-%m-%d %H:%M:%S'))) & (
+                                  action['type'] == 4)] \
+                    [['user_id', 'sku_id', 'brand']].drop_duplicates()
+
+            user_item = pd.DataFrame(np.array(list(set([tuple(i) for i in user_item.values]) -
+                                                   (set([tuple(i) for i in user_item.values]) & set(
+                                                       [tuple(i) for i in tmpp.values])))),
+                                     columns=['user_id', 'sku_id', 'brand'])
 
             # 加上样本日
             __tmpset = copy.deepcopy(user_item)
@@ -698,9 +746,9 @@ def create2():
 
                 tmp_whole_action = whole_action[
                     (whole_action['time'] >= (feature_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                    (whole_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))]
+                    (whole_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S')))]
                 tmp_action = action[(action['time'] >= (feature_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                                    (action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S')))]
+                                    (action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S')))]
 
                 # 用户的对商品，品牌，类别，整体的特征
                 # 时间跨度为6h,12h,1d,3d,7d,14d和之前所有的
@@ -710,18 +758,20 @@ def create2():
                 # 浏览数,加购数,减购数,下单数，关注数，点击数
                 # 不需要类别的特征，因为大家都是cate8
                 for _, i in enumerate([3, 6, 12, 24, 24 * 3, 24 * 7, 24 * 14,
-                                       (convert_timedelta(label_begin_datetime - datetime.datetime(2016, 2, 1)))]):
+                                       (
+                                       convert_timedelta((feature_end_datetime + delta) - datetime.datetime(2016, 2, 1)))]):
                     for j in [1, 2, 3, 4, 5, 6]:
                         tmp_tmp_action = tmp_action[
-                            (tmp_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
+                            (tmp_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
                             (tmp_action['time'] >= (
-                                (label_begin_datetime - datetime.timedelta(hours=i)).strftime(
+                                (feature_end_datetime + delta - datetime.timedelta(hours=i)).strftime(
                                     '%Y-%m-%d %H:%M:%S'))) & \
                             (tmp_action['type'] == j)]
                         tmp_tmp_whole_action = tmp_whole_action[
-                            (tmp_whole_action['time'] <= (label_begin_datetime.strftime('%Y-%m-%d %H:%M:%S'))) & \
-                            (tmp_whole_action['time'] >= ((label_begin_datetime - datetime.timedelta(hours=i)).strftime(
-                                '%Y-%m-%d %H:%M:%S'))) & \
+                            (tmp_whole_action['time'] <= ((feature_end_datetime + delta).strftime('%Y-%m-%d %H:%M:%S'))) & \
+                            (tmp_whole_action['time'] >= (
+                                (feature_end_datetime + delta - datetime.timedelta(hours=i)).strftime(
+                                    '%Y-%m-%d %H:%M:%S'))) & \
                             (tmp_whole_action['type'] == j)]
 
                         # 为了命名而做判断
@@ -746,13 +796,11 @@ def create2():
                                               on=['user_id'], how='left')
 
                             tmpset = pd.merge(tmpset,
-                                              tmp_tmp_whole_action.groupby(['sku_id'])[
-                                                  'cate'].count().reset_index().rename(
+                                              tmp_tmp_whole_action.groupby(['sku_id'])['cate'].count().reset_index().rename(
                                                   columns={'cate': 'skuid_whole_' + str(i) + 'h' + '_type' + str(j)}),
                                               on=['sku_id'], how='left')
                             tmpset = pd.merge(tmpset,
-                                              tmp_tmp_whole_action.groupby(['brand'])[
-                                                  'cate'].count().reset_index().rename(
+                                              tmp_tmp_whole_action.groupby(['brand'])['cate'].count().reset_index().rename(
                                                   columns={'cate': 'brand_whole_' + str(i) + 'h' + '_type' + str(j)}),
                                               on=['brand'], how='left')
                         else:
@@ -776,18 +824,16 @@ def create2():
                                               on=['user_id'], how='left')
 
                             tmpset = pd.merge(tmpset,
-                                              tmp_tmp_whole_action.groupby(['sku_id'])[
-                                                  'cate'].count().reset_index().rename(
+                                              tmp_tmp_whole_action.groupby(['sku_id'])['cate'].count().reset_index().rename(
                                                   columns={'cate': 'skuid_whole_' + 'before' + '_type' + str(j)}),
                                               on=['sku_id'], how='left')
                             tmpset = pd.merge(tmpset,
-                                              tmp_tmp_whole_action.groupby(['brand'])[
-                                                  'cate'].count().reset_index().rename(
+                                              tmp_tmp_whole_action.groupby(['brand'])['cate'].count().reset_index().rename(
                                                   columns={'cate': 'brand_whole_' + 'before' + '_type' + str(j)}),
                                               on=['brand'], how='left')
 
                 # 填充0，之后相除会出现inf，再替换
-                tmpset.fillna(0, inplace=True)
+                tmpset.fillna(0)
 
                 tmp_timegap_list = ['3h_type', '6h_type', '12h_type', '24h_type', '72h_type', '168h_type', '336h_type',
                                     'before_type']
@@ -864,7 +910,7 @@ def create2():
 
                     # 用户特征的重构
                     for j in ['skuid_', 'brand_', 'cate_', 'whole_']:
-                        # 该用户其他行为对下单的转化率,体现的是这个用户近期各个行为的转化率
+                        # 该用户其他行为对下单的转化率,体现的是这个用户近期买东西的习惯
                         tmpset = pd.concat([tmpset,
                                             pd.DataFrame(tmpset[j + i + '4'] / tmpset[j + i + '1'].astype('float'),
                                                          columns=[j + i + '4/1']),
@@ -880,27 +926,27 @@ def create2():
                         # 加用户的差分特征，体现的是用户对于该商品，品牌，类别，总体的浏览,加购……的递进情况
                         if _ != 7:
                             tmpset = pd.concat([tmpset,
-                                                pd.DataFrame(-2 * tmpset[j + tmp_timegap_list[_] + '1'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '1'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '1'],
                                                              columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                                  _ + 1] + '1']),
-                                                pd.DataFrame(- 2 * tmpset[j + tmp_timegap_list[_] + '2'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '2'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '2'],
                                                              columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                                  _ + 1] + '2']),
-                                                pd.DataFrame(- 2 * tmpset[j + tmp_timegap_list[_] + '3'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '3'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '3'],
                                                              columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                                  _ + 1] + '3']),
-                                                pd.DataFrame(- 2 * tmpset[j + tmp_timegap_list[_] + '4'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '4'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '4'],
                                                              columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                                  _ + 1] + '4']),
-                                                pd.DataFrame(- 2 * tmpset[j + tmp_timegap_list[_] + '5'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '5'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '5'],
                                                              columns=[j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
                                                                  _ + 1] + '5']),
-                                                pd.DataFrame(- 2 * tmpset[j + tmp_timegap_list[_] + '6'] + tmpset[
+                                                pd.DataFrame(tmpset[j + tmp_timegap_list[_] + '6'] - 2 * tmpset[
                                                     j + tmp_timegap_list[_ + 1] + '6'],
                                                              columns=[
                                                                  j + tmp_timegap_list[_] + '-' + tmp_timegap_list[
@@ -956,8 +1002,7 @@ def create2():
                 # 加商品评论信息
                 weekday = feature_end_datetime.weekday()
                 tmpset = pd.merge(tmpset,
-                                  comment[
-                                      comment['dt'] == ((feature_end_datetime - weekday * delta).strftime('%Y-%m-%d'))][
+                                  comment[comment['dt'] == ((feature_end_datetime - weekday * delta).strftime('%Y-%m-%d'))][
                                       ['sku_id', 'comment_num', 'has_bad_comment', 'bad_comment_rate']]
                                   .rename(columns={'comment_num': 'before1stMon_comment_num',
                                                    'has_bad_comment': 'before1stMon_has_bad_comment',
@@ -974,12 +1019,10 @@ def create2():
 
                 # 商品评论差分信息
                 tmpset = pd.concat([tmpset,
+                                    pd.DataFrame(tmpset['before1stMon_comment_num'] - tmpset['before2ndMon_comment_num'],
+                                                 columns=['before1stMon-before2ndMon_comment_num']),
                                     pd.DataFrame(
-                                        tmpset['before1stMon_comment_num'] - tmpset['before2ndMon_comment_num'],
-                                        columns=['before1stMon-before2ndMon_comment_num']),
-                                    pd.DataFrame(
-                                        tmpset['before1stMon_bad_comment_rate'] - tmpset[
-                                            'before2ndMon_bad_comment_rate'],
+                                        tmpset['before1stMon_bad_comment_rate'] - tmpset['before2ndMon_bad_comment_rate'],
                                         columns=['before1stMon-before2ndMon_bad_comment_rate'])], axis=1)
 
                 # 加品牌评论信息
@@ -990,8 +1033,7 @@ def create2():
                                       ['brand', 'comment_num', 'has_bad_comment', 'bad_comment_rate']]
                                   .rename(columns={'comment_num': 'brand_before1stMon_comment_num',
                                                    'has_bad_comment': 'brand_before1stMon_has_bad_comment',
-                                                   'bad_comment_rate': 'brand_before1stMon_bad_comment_rate'}),
-                                  on='brand',
+                                                   'bad_comment_rate': 'brand_before1stMon_bad_comment_rate'}), on='brand',
                                   how='left')
                 tmpset = pd.merge(tmpset,
                                   brand_comment[brand_comment['dt'] == (
@@ -999,15 +1041,13 @@ def create2():
                                       ['brand', 'comment_num', 'has_bad_comment', 'bad_comment_rate']]
                                   .rename(columns={'comment_num': 'brand_before2ndMon_comment_num',
                                                    'has_bad_comment': 'brand_before2ndMon_has_bad_comment',
-                                                   'bad_comment_rate': 'brand_before2ndMon_bad_comment_rate'}),
-                                  on='brand',
+                                                   'bad_comment_rate': 'brand_before2ndMon_bad_comment_rate'}), on='brand',
                                   how='left')
 
                 # 商品评论差分信息
                 tmpset = pd.concat([tmpset,
                                     pd.DataFrame(
-                                        tmpset['brand_before1stMon_comment_num'] - tmpset[
-                                            'brand_before2ndMon_comment_num'],
+                                        tmpset['brand_before1stMon_comment_num'] - tmpset['brand_before2ndMon_comment_num'],
                                         columns=['brand_before1stMon-before2ndMon_comment_num']),
                                     pd.DataFrame(
                                         tmpset['brand_before1stMon_bad_comment_rate'] - tmpset[
@@ -1037,17 +1077,14 @@ def create2():
                         columns={0: 'skuid_average_hours_type{}'.format(i)}), how='left')
                     tmpset = pd.merge(tmpset, group.mean(level=['brand']).reset_index().rename(
                         columns={0: 'brand_average_hours_type{}'.format(i)}), how='left')
-                    tmpset['skuid-brand_average_hours_type{}'.format(i)] = tmpset[
-                                                                               'skuid_average_hours_type{}'.format(i)] \
-                                                                           - tmpset[
-                                                                               'brand_average_hours_type{}'.format(i)]
+                    tmpset['skuid-brand_average_hours_type{}'.format(i)] = tmpset['skuid_average_hours_type{}'.format(i)] \
+                                                                           - tmpset['brand_average_hours_type{}'.format(i)]
 
                     for j in [('farest', 'first'), ('nearest', 'last')]:
                         # 加入用户商品时间信息
                         tmp1 = pd.merge(tmpset[['user_id', 'sku_id', 'feature_end_date']],
                                         action_type['action_type{}'.format(i)][
-                                            (action_type['action_type{}'.format(i)][
-                                                 'time'] < label_begin_datetime.strftime(
+                                            (action_type['action_type{}'.format(i)]['time'] < label_begin_datetime.strftime(
                                                 '%Y-%m-%d %H:%M:%S')) &
                                             (action_type['action_type{}'.format(i)][
                                                  'time'] > feature_begin_datetime.strftime(
@@ -1064,8 +1101,7 @@ def create2():
                         tmpset = pd.merge(tmpset, tmp, on=['user_id', 'sku_id', 'feature_end_date'], how='left')
                         tmp1 = pd.merge(tmpset[['user_id', 'brand', 'feature_end_date']]
                                         , action_type['action_type{}'.format(i)][
-                                            (action_type['action_type{}'.format(i)][
-                                                 'time'] < label_begin_datetime.strftime(
+                                            (action_type['action_type{}'.format(i)]['time'] < label_begin_datetime.strftime(
                                                 '%Y-%m-%d %H:%M:%S')) &
                                             (action_type['action_type{}'.format(i)][
                                                  'time'] > feature_begin_datetime.strftime(
@@ -1110,20 +1146,16 @@ def create2():
                         del tmp['time']
                         tmpset = pd.merge(tmpset, tmp, on=['user_id', 'feature_end_date'], how='left')
                     tmp1 = pd.DataFrame(
-                        (tmpset['userid_skuid_farest_type{}'.format(i)] - tmpset[
-                            'userid_skuid_nearest_type{}'.format(i)] + 1),
+                        (tmpset['userid_skuid_farest_type{}'.format(i)] - tmpset['userid_skuid_nearest_type{}'.format(i)]),
                         columns=['userid_skuid_farest-nearest_type{}'.format(i)])
                     tmp2 = pd.DataFrame(
-                        (tmpset['userid_brand_farest_type{}'.format(i)] - tmpset[
-                            'userid_brand_nearest_type{}'.format(i)] + 1),
+                        (tmpset['userid_brand_farest_type{}'.format(i)] - tmpset['userid_brand_nearest_type{}'.format(i)]),
                         columns=['userid_brand_farest-nearest_type{}'.format(i)])
                     tmp3 = pd.DataFrame(
-                        (tmpset['userid_cate_farest_type{}'.format(i)] - tmpset[
-                            'userid_cate_nearest_type{}'.format(i)] + 1),
+                        (tmpset['userid_cate_farest_type{}'.format(i)] - tmpset['userid_cate_nearest_type{}'.format(i)]),
                         columns=['userid_cate_farest-nearest_type{}'.format(i)])
                     tmp4 = pd.DataFrame(
-                        (tmpset['userid_whole_farest_type{}'.format(i)] - tmpset[
-                            'userid_whole_nearest_type{}'.format(i)] + 1),
+                        (tmpset['userid_whole_farest_type{}'.format(i)] - tmpset['userid_whole_nearest_type{}'.format(i)]),
                         columns=['userid_whole_farest-nearest_type{}'.format(i)])
                     tmpset = pd.concat([tmpset, tmp1, tmp2, tmp3, tmp4], axis=1)
 
@@ -1163,19 +1195,19 @@ def create2():
 
                                         # 用户行为的频率
                                         pd.DataFrame(
-                                            tmpset['skuid_336h_type{}'.format(i)] /
+                                            tmpset['skuid_before_type{}'.format(i)] /
                                             tmpset['userid_skuid_farest-nearest_type{}'.format(i)],
                                             columns=['userid_skuid_frequency_type{}'.format(i)]),
                                         pd.DataFrame(
-                                            tmpset['brand_336h_type{}'.format(i)] /
+                                            tmpset['brand_before_type{}'.format(i)] /
                                             tmpset['userid_brand_farest-nearest_type{}'.format(i)],
                                             columns=['userid_brand_frequency_timegap_type{}'.format(i)]),
                                         pd.DataFrame(
-                                            tmpset['cate_336h_type{}'.format(i)] /
+                                            tmpset['cate_before_type{}'.format(i)] /
                                             tmpset['userid_cate_farest-nearest_type{}'.format(i)],
                                             columns=['userid_cate_frequency_timegap_type{}'.format(i)]),
                                         pd.DataFrame(
-                                            tmpset['whole_336h_type{}'.format(i)] /
+                                            tmpset['whole_before_type{}'.format(i)] /
                                             tmpset['userid_whole_farest-nearest_type{}'.format(i)],
                                             columns=['userid_whole_frequency_timegap_type{}'.format(i)]),
 
@@ -1204,7 +1236,6 @@ def create2():
                                             -tmpset['userid_cate_nearest_type{}'.format(i)] +
                                             tmpset['userid_whole_nearest_type{}'.format(i)],
                                             columns=['userid_cate-whole_nearest_type{}'.format(i)]),
-
                                         # 用户对该商品的最远点击、收藏、加购物车、购买时间
                                         # 减去同类其他商品的最近点远、收藏、加购物车、购买时间
                                         pd.DataFrame(
@@ -1257,6 +1288,10 @@ def create2():
                                             tmpset['userid_cate_farest-nearest_type{}'.format(i)] -
                                             tmpset['userid_whole_average_hours_type{}'.format(i)],
                                             columns=['userid_cate-whole_average_hours_type{}'.format(i)]),
+                                        pd.DataFrame(
+                                            tmpset['userid_cate_farest-nearest_type{}'.format(i)] -
+                                            tmpset['userid_whole_average_hours_type{}'.format(i)],
+                                            columns=['userid_cate-whole_average_hours_type{}'.format(i)]),
 
                                         pd.DataFrame(
                                             tmpset['userid_skuid_farest-nearest_type{}'.format(i)] -
@@ -1265,7 +1300,7 @@ def create2():
                                         pd.DataFrame(
                                             tmpset['userid_brand_farest-nearest_type{}'.format(i)] -
                                             tmpset['brand_average_hours_type{}'.format(i)],
-                                            columns=['userid_skuid-brand_average_hours_type{}'.format(i)]),
+                                            columns=['userid_skuid-skuid_average_hours_type{}'.format(i)]),
                                         ], axis=1)
 
                 _tmpset=pd.concat([_tmpset,tmpset])
@@ -1277,50 +1312,62 @@ def create2():
                 os.chdir('/home/fengyufei/PycharmProjects/jd_competition/predictset/online/')
                 _tmpset.to_csv('online_{}.csv'.format(www), index=False)
 
-def feature_selection(model=None):
-    os.chdir('../predictset/offline' )
+def feature_selection(line, model):
+    os.chdir('../predictset/' + line)
     # 读取模型，获得得分特征的顺序
     modell = xgb.Booster()
-    modell.load_model('offline_' + model)
-    selected_feature=get_selected_feature('xgb',modell)
-    length = len(selected_feature)
+    modell.load_model(line + '_' + model)
+    best_res={'Score':0,'selected_items_number':0}
 
-    best_res={'Score':0,'selected_features':[],'selected_items_number':0}
+    #训练
+    os.chdir('../../trainset/' + line)
+    trainset = pd.read_csv(line + '.csv').fillna(-1).replace(np.inf,-1)
 
-    for qqq in range(length/10,length+1,length/10):
-        #训练
-        os.chdir('../../trainset/offline')
-        trainset = pd.read_csv('offline.csv').fillna(-1).replace(np.inf,-1)
-
-        train_x, train_y = trainset.ix[:, 5:].ix[:,selected_feature[:qqq]].values, trainset.ix[:, 4].values
+    train_x, train_y = trainset.ix[:, 5:].values, trainset.ix[:, 4].values
+    if model == 'rf':
+        modell = RandomForestRegressor(
+            n_estimators=500,
+            max_depth=20,
+            max_features="auto",
+            n_jobs=-1,
+            oob_score=True,
+        )
+        modell.fit(train_x, train_y)
+    elif model == 'xgb':
         dtrain = xgb.DMatrix(train_x, label=train_y)
-        params = {'max_depth': 8, 'silent': 1, 'eta': 0.1, 'colsample_bytree': 0.8,
+        params = {'max_depth': 8, 'silent': 1, 'eta': 0.1, 'colsample_bytree': 0.8, 'eval_metric': 'logloss',
                   'seed': 2017, 'objective': 'reg:logistic'}
         num_round = 400
         modell = xgb.train(params, dtrain, num_round)
 
-        # 读取预测集
-        os.chdir('../../predictset/offline')
-        predictset = pd.read_csv( 'offline.csv').fillna(-1).replace(np.inf,-1)
-        predict_x = predictset.ix[:, 4:].ix[:,selected_feature[:qqq]].values
-        dpredict = xgb.DMatrix(predict_x)
+    # 读取预测集
+    os.chdir('../../predictset/' + line)
+    predictset = pd.read_csv(line + '.csv').fillna(-1).replace(np.inf,-1)
+    predict_x = predictset.ix[:, 4:].values
+    dpredict = xgb.DMatrix(predict_x)
 
-        os.chdir('../../outcome/offline')
+    os.chdir('../../outcome/' + line)
+    if model == 'rf':
+        tmp1 = pd.concat([predictset, pd.DataFrame(modell.predict(predict_x), columns=['label'])],
+                         axis=1).sort_values(
+            by='label', ascending=False)
+    elif model == 'xgb':
         tmp1 = pd.concat([predictset, pd.DataFrame(modell.predict(dpredict), columns=['label'])],
                          axis=1).sort_values(
             by='label', ascending=False)
 
-        # 挑选输出多少结果
-        for selected_items_number in range(200, 2201, 200):
-            tmp = [tuple(i) for i in tmp1.iloc[:selected_items_number][['user_id', 'sku_id']].values]
-            user_existed = []
-            res = []
-            for i in tmp:
-                if i[0] not in user_existed:
-                    res.append(i)
-                    user_existed.append(i[0])
+    # 挑选输出多少结果
+    for selected_items_number in range(200, 2201, 200):
+        tmp = [tuple(i) for i in tmp1.iloc[:selected_items_number][['user_id', 'sku_id']].values]
+        user_existed = []
+        res = []
+        for i in tmp:
+            if i[0] not in user_existed:
+                res.append(i)
+                user_existed.append(i[0])
 
-            # 评分
+        # 线下评分
+        if line == 'offline':
             '''
             Score=0.4*F11 + 0.6*F12
             此处的F1值定义为：
@@ -1339,13 +1386,14 @@ def feature_selection(model=None):
                 2.0 * len(right2) / len(test) + 3.0 * len(right2) / len(res))
             Score = 0.4 * F11 + 0.6 * F22
             if Score>best_res['Score']:
-                best_res['selected_features'] = selected_feature[:qqq]
                 best_res['selected_items_number']=selected_items_number
                 best_res['F11_score']=F11
                 best_res['F22_score']=F22
                 best_res['Score']=Score
 
-    print '最好的特征是前{}个'.format(len(best_res['selected_features']))
+                #保存结果
+                pd.DataFrame(res).to_csv(line + '.csv', index=False, header=['user_id', 'sku_id'])
+
     print '最好的提交结果是前{}个'.format(best_res['selected_items_number']),
     print '最好的F11_score是{}'.format(best_res['F11_score']),
     print '最好的F22_score是{}'.format(best_res['F22_score']),
@@ -1663,12 +1711,15 @@ def feature_selection_shoudong():
     print 'F12:{}'.format(best_res['F12'])
     print 'Score:{}'.format(best_res['Score'])
 
-def train_and_predict(line=None, model=None,which=None):
+def train_and_predict(line=None, model=None,best_res=None):
     os.chdir('../trainset/' + line)
-    trainset = pd.read_csv(line + '_{}.csv'.format(which)).fillna(-1).replace(np.inf, -1)
+    trainset = pd.read_csv(line + '.csv').fillna(-1).replace(np.inf,-1)
     train_x, train_y = trainset.ix[:, 5:].values, trainset.ix[:, 4].values
 
-    selected_items_number = 1000
+    if best_res:
+        selected_items_number=best_res['selected_items_number']
+    else:
+        selected_items_number=1200
 
     if model == 'rf':
         modell = RandomForestRegressor(
@@ -1681,23 +1732,23 @@ def train_and_predict(line=None, model=None,which=None):
         modell.fit(train_x, train_y)
     elif model == 'xgb':
         dtrain = xgb.DMatrix(train_x, label=train_y)
-        params = {'max_depth': 20, 'silent': 1, 'eta': 0.1, 'colsample_bytree': 0.3, 'eval_metric': 'logloss',
+        params = {'max_depth': 10, 'silent': 1, 'eta': 0.1, 'colsample_bytree': 0.3, 'eval_metric': 'logloss',
                   'seed': 2017, 'objective': 'reg:logistic'}
-        num_round = 4000
+        num_round = 400
         modell = xgb.train(params, dtrain, num_round)
 
     # 读取预测集
     os.chdir('../../predictset/' + line)
-    predictset = pd.read_csv(line + '_{}.csv'.format(which)).fillna(-1).replace(np.inf, -1)
+    predictset = pd.read_csv(line + '.csv').fillna(-1).replace(np.inf, -1)
     predict_x = predictset.ix[:, 4:].values
     dpredict = xgb.DMatrix(predict_x)
 
-    # 如果是为了得到基础模型，就保存模型
-    if line == 'offline':
+    #如果是为了得到基础模型，就保存模型
+    if not best_res:
         if model == 'xgb':
-            modell.save_model(line + '_' + model)
-        elif model == 'rf':
-            joblib.dump(modell, line + '_' + model)
+            modell.save_model(line+'_'+model)
+        elif model=='rf':
+            joblib.dump(modell, line+'_'+model)
 
     os.chdir('../../outcome/' + line)
     if model == 'rf':
@@ -1709,18 +1760,17 @@ def train_and_predict(line=None, model=None,which=None):
                          axis=1).sort_values(
             by='label', ascending=False)
 
-    # 获得结果并保存
+    #获得结果并保存
+    tmp = [tuple(i) for i in tmp1.iloc[:selected_items_number][['user_id','sku_id']].values]
+    user_existed = []
+    res = []
+    for i in tmp:
+        if i[0] not in user_existed:
+            res.append(i)
+            user_existed.append(i[0])
+    pd.DataFrame(res).to_csv(line + '.csv', index=False,header=['user_id','sku_id'])
+
     if line == 'offline':
-        print 'selected_items_number:', selected_items_number
-        tmp = [tuple(i) for i in tmp1.iloc[:selected_items_number][['user_id', 'sku_id']].values]
-        user_existed = []
-        res = []
-        for i in tmp:
-            if i[0] not in user_existed:
-                res.append(i)
-                user_existed.append(i[0])
-        pd.DataFrame(res).to_csv(line + '_{}.csv'.format(which), index=False, header=['user_id', 'sku_id'])
-        print line + '_{}.csv'.format(which) + ' is saved'
         '''
         Score=0.4*F11 + 0.6*F12
         此处的F1值定义为：
@@ -1740,50 +1790,6 @@ def train_and_predict(line=None, model=None,which=None):
         print 'F12:', F22
         Score = 0.4 * F11 + 0.6 * F22
         print 'Score:', Score
-
-    else:
-        # 保存线上文件
-        tmp = [tuple(i) for i in tmp1.iloc[:selected_items_number][['user_id', 'sku_id']].values]
-        user_existed = []
-        res = []
-        for i in tmp:
-            if i[0] not in user_existed:
-                res.append(i)
-                user_existed.append(i[0])
-        pd.DataFrame(res).to_csv(line + '_{}.csv'.format(which), index=False, header=['user_id', 'sku_id'])
-        print line + '_{}.csv'.format(which) + ' is saved'
-
-def merge_and_judge(line=None):
-    os.chdir('../outcome/'+line)
-    res0,res1,res2=set([tuple(i) for i in pd.read_csv(line+'_0.csv').iloc[:1500].values]), \
-                   set([tuple(i) for i in pd.read_csv(line + '_1.csv').iloc[:1000].values]), \
-                   set([tuple(i) for i in pd.read_csv(line + '_2.csv').iloc[:800].values])
-    tmp=pd.DataFrame(list((res0&res1)|(res1&res2)|(res0&res2)),columns=['user_id', 'sku_id'])
-    #tmp = pd.DataFrame(list(res0&res1&res2), columns=['user_id', 'sku_id'])
-    print '生成了{}个结果'.format(tmp.shape[0])
-    tmp.to_csv(line+'.csv',index=False)
-    if line=='offline':
-        res=[tuple(i) for i in tmp.values]
-        '''
-        Score=0.4*F11 + 0.6*F12
-        此处的F1值定义为：
-        F11=6*Recall*Precise/(5*Recall+Precise)
-        F12=5*Recall*Precise/(2*Recall+3*Precise)
-        其中，Precise为准确率，Recall为召回率.
-        F11是label=1或0的F1值，F12是pred=1或0的F1值.
-        '''
-        test = [tuple(i) for i in pd.read_csv('test.csv').values]
-        right1 = set([i[0] for i in res]) & set([i[0] for i in test])
-        F11 = 6.0 * len(right1) / len(test) * len(right1) / len(res) / (
-            5.0 * len(right1) / len(test) + 1.0 * len(right1) / len(res))
-        print 'F11:', F11
-        right2 = set(res) & set(test)
-        F22 = 5.0 * len(right2) / len(test) * len(right2) / len(res) / (
-            2.0 * len(right2) / len(test) + 3.0 * len(right2) / len(res))
-        print 'F12:', F22
-        Score = 0.4 * F11 + 0.6 * F22
-        print 'Score:', Score
-
 
 if __name__ == '__main__':
     # 参考PPT：https://wenku.baidu.com/view/e12e33ba59eef8c75fbfb3f6.html?re=view
@@ -1794,12 +1800,12 @@ if __name__ == '__main__':
     #建立数据集
     #create()
     #os.chdir('/home/fengyufei/PycharmProjects/jd_competition/code')
-    #create2()
-    #os.chdir('/home/fengyufei/PycharmProjects/jd_competition/code')
-    #print 'all sets are created at',datetime.datetime.now()
+    create2()
+    os.chdir('/home/fengyufei/PycharmProjects/jd_competition/code')
+    print 'all sets are created at',datetime.datetime.now()
 
     #先进行一次整体的训练，为了得到一个基础模型
-    train_and_predict(line='offline', model='xgb',which=0)
+    #train_and_predict(line='offline', model='xgb')
     #os.chdir('/home/fengyufei/PycharmProjects/jd_competition/code')
     #print 'offline model comes out at', datetime.datetime.now()
 
@@ -1811,11 +1817,7 @@ if __name__ == '__main__':
     #print 'feature selection ends at', datetime.datetime.now()
 
     #线上答案生成
-    #train_and_predict(line='online', model='xgb',which=2)
+    #train_and_predict(line='online', model='xgb')
     #print 'online result comes out at',datetime.datetime.now()
-
-    # 合并提交
-    #merge_and_judge(line='offline')
-    #print 'merge ends at',datetime.datetime.now()
 
     print 'end at ', datetime.datetime.now()
